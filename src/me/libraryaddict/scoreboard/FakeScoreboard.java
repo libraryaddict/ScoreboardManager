@@ -1,8 +1,8 @@
 package me.libraryaddict.scoreboard;
 
+import java.util.Collection;
 import java.util.HashMap;
 
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.DisplaySlot;
 
@@ -50,19 +50,19 @@ public class FakeScoreboard {
         for (DisplaySlot slot : objectives.keySet()) {
             for (String name : objectives.get(slot).keySet()) {
                 int score = objectives.get(slot).get(name);
-                if (score == 0)
-                    ScoreboardManager.makeScore(player, slot, name, score + 1);
                 ScoreboardManager.makeScore(player, slot, name, score);
             }
         }
         for (FakeTeam fakeTeam : teams.values()) {
-            org.bukkit.scoreboard.Team team = player.getScoreboard().registerNewTeam(fakeTeam.getTeamName());
-            team.setPrefix(fakeTeam.getPrefix());
-            team.setCanSeeFriendlyInvisibles(fakeTeam.canSeeInvisiblePlayers());
-            for (OfflinePlayer p : fakeTeam.getPlayers()) {
-                team.addPlayer(p);
+            for (String p : fakeTeam.getPlayers()) {
+                ScoreboardManager.addToTeam(player, p, fakeTeam.getTeamName(), fakeTeam.getPrefix(), fakeTeam.getSuffix(),
+                        fakeTeam.canSeeInvisiblePlayers());
             }
         }
+    }
+
+    public Collection<FakeTeam> getFakeTeams() {
+        return teams.values();
     }
 
 }

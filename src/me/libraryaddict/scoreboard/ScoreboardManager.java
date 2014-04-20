@@ -1,58 +1,137 @@
 package me.libraryaddict.scoreboard;
 
 import org.bukkit.Bukkit;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
+import org.bukkit.scoreboard.Score;
 import org.bukkit.scoreboard.Scoreboard;
 import org.bukkit.scoreboard.Team;
 
 public class ScoreboardManager {
     private static FakeScoreboard mainScoreboard = new FakeScoreboard();
 
-    public static void addToTeam(OfflinePlayer player, String teamName, String teamPrefix, boolean seeFriendlyInvis) {
-        removeFromTeam(player);
+    public static void addToTeam(String player, String teamName, String teamPrefix, boolean seeFriendlyInvis) {
+        addToTeam(player, teamName, teamPrefix, null, seeFriendlyInvis);
+    }
+
+    public static void addToTeam(String player, String teamName, String teamPrefix, String teamSuffix, boolean seeFriendlyInvis) {
+        for (FakeTeam team : mainScoreboard.getFakeTeams()) {
+            team.removePlayer(player);
+        }
         FakeTeam team = mainScoreboard.getFakeTeam(teamName);
         if (team == null) {
             team = mainScoreboard.createFakeTeam(teamName);
-            team.setPrefix(teamPrefix);
+            if (teamPrefix != null)
+                team.setPrefix(teamPrefix);
+            if (teamSuffix != null)
+                team.setSuffix(teamSuffix);
+            team.setSeeInvisiblePlayers(seeFriendlyInvis);
+        } else {
+            if (teamPrefix != null)
+                team.setPrefix(teamPrefix);
+            if (teamSuffix != null)
+                team.setSuffix(teamSuffix);
             team.setSeeInvisiblePlayers(seeFriendlyInvis);
         }
         team.addPlayer(player);
         for (Player p : Bukkit.getOnlinePlayers()) {
-            addToTeam(p, player, teamName, teamPrefix, seeFriendlyInvis);
+            addToTeam(p, player, teamName, teamPrefix, teamSuffix, seeFriendlyInvis);
         }
     }
 
-    public static void addToTeam(Player observer, OfflinePlayer player, String teamName, String teamPrefix,
-            boolean seeFriendlyInvis) {
-        removeFromTeam(observer, player);
-        Scoreboard board = observer.getScoreboard();
-        if (board.getTeam(teamName) == null) {
-            Team newTeam = board.registerNewTeam(teamName);
-            newTeam.setCanSeeFriendlyInvisibles(seeFriendlyInvis);
-            newTeam.setPrefix(teamPrefix);
+    public static void clearScoreboard(Player player) {
+        Scoreboard board = player.getScoreboard();
+        for (Objective obj : board.getObjectives()) {
+            obj.unregister();
         }
-        board.getTeam(teamName).addPlayer(player);
+        for (String p : board.getEntries()) {
+            board.resetScores(p);
+        }
+        for (Team team : board.getTeams()) {
+            team.unregister();
+        }
     }
 
-    public static void removeFromTeam(OfflinePlayer player) {
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            Scoreboard board = p.getScoreboard();
-            for (Team team : board.getTeams()) {
-                if (team.hasPlayer(player)) {
-                    team.removePlayer(player);
-                }
+    public static void clearScoreboard(Player player, DisplaySlot slot) {
+        Scoreboard board = player.getScoreboard();
+        for (Objective obj : board.getObjectives()) {
+            if (obj.getDisplaySlot() == slot) {
+                obj.unregister();
             }
         }
     }
 
-    public static void removeFromTeam(Player observer, OfflinePlayer player) {
+    public static void clearScoreboards() {
+        mainScoreboard = new FakeScoreboard();
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            clearScoreboard(player);
+        }
+    }
+
+    public static void addToTeam(Player observer, String player, String teamName, String teamPrefix, String teamSuffix,
+            boolean seeFriendlyInvis) {
+        Scoreboard board = observer.getScoreboard();
+        boolean addToTeam = false;
+        Team team = board.getTeam(teamName);
+        if (team == null || !team.hasEntry(player)) {
+            removeFromTeam(observer, player);
+            addToTeam = true;
+        }
+        if (team == null) {
+            team = board.registerNewTeam(teamName);
+            if (teamPrefix != null)
+                team.setPrefix(teamPrefix);
+            if (teamSuffix != null)
+                team.setSuffix(teamSuffix);
+            team.setCanSeeFriendlyInvisibles(seeFriendlyInvis);
+            team.setAllowFriendlyFire(!seeFriendlyInvis);
+        } else {
+            if (teamPrefix == null) {
+                teamPrefix = "";
+            }
+            if (teamSuffix == null) {
+                teamSuffix = "";
+            }
+            if (!teamPrefix.equals(team.getPrefix())) {
+                team.setPrefix(teamPrefix);
+            }
+            if (!teamSuffix.equals(team.getSuffix())) {
+                team.setSuffix(teamSuffix);
+            }
+            if (seeFriendlyInvis != team.canSeeFriendlyInvisibles()) {
+                team.setCanSeeFriendlyInvisibles(seeFriendlyInvis);
+                team.setAllowFriendlyFire(!seeFriendlyInvis);
+            }
+        }
+        if (addToTeam) {
+            team.addEntry(player);
+        }
+    }
+
+    public static void addToTeam(Player observer, String player, String teamName, String teamPrefix, boolean seeFriendlyInvis) {
+        addToTeam(observer, player, teamName, teamPrefix, null, seeFriendlyInvis);
+    }
+
+    public static void removeFromTeam(String player) {
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            Scoreboard board = p.getScoreboard();
+            for (Team team : board.getTeams()) {
+                if (team.hasEntry(player)) {
+                    team.removeEntry(player);
+                }
+            }
+        }
+        for (FakeTeam team : mainScoreboard.getFakeTeams()) {
+            team.removePlayer(player);
+        }
+    }
+
+    public static void removeFromTeam(Player observer, String player) {
         Scoreboard board = observer.getScoreboard();
         for (Team team : board.getTeams()) {
-            if (team.hasPlayer(player)) {
-                team.removePlayer(player);
+            if (team.hasEntry(player)) {
+                team.removeEntry(player);
             }
         }
     }
@@ -75,7 +154,7 @@ public class ScoreboardManager {
     public static void hideScore(Player player, DisplaySlot slot, String name) {
         if (name.length() > 16)
             name = name.substring(0, 16);
-        player.getScoreboard().resetScores(Bukkit.getOfflinePlayer(name));
+        player.getScoreboard().resetScores(name);
     }
 
     public static void makeScore(DisplaySlot slot, String name, int score) {
@@ -89,23 +168,28 @@ public class ScoreboardManager {
         if (name.length() > 16) {
             name = name.substring(0, 16);
         }
-        getObjective(player.getScoreboard(), slot).getScore(Bukkit.getOfflinePlayer(name)).setScore(score);
+        Score c = getObjective(player.getScoreboard(), slot).getScore(name);
+        if (score == 0 && slot == DisplaySlot.SIDEBAR && !c.isScoreSet()) {
+            c.setScore(1);
+        }
+        if (c.getScore() != score) {
+            c.setScore(score);
+        }
     }
 
     public static void registerScoreboard(Player player) {
-        Scoreboard board = Bukkit.getScoreboardManager().getNewScoreboard();
-        player.setScoreboard(board);
+        player.setScoreboard(Bukkit.getScoreboardManager().getNewScoreboard());
         mainScoreboard.setupObjectives(player);
     }
 
-    public static void removeFromTeam(OfflinePlayer player, String teamName) {
+    public static void removeFromTeam(String player, String teamName) {
         FakeTeam team = mainScoreboard.getFakeTeam(teamName);
         if (team != null)
             team.removePlayer(player);
         for (Player p : Bukkit.getOnlinePlayers()) {
             Scoreboard board = p.getScoreboard();
-            if (board.getTeam(teamName) != null && board.getTeam(teamName).hasPlayer(player))
-                board.getTeam(teamName).removePlayer(player);
+            if (board.getTeam(teamName) != null && board.getTeam(teamName).hasEntry(player))
+                board.getTeam(teamName).removeEntry(player);
         }
     }
 
@@ -117,6 +201,18 @@ public class ScoreboardManager {
 
     public static void setDisplayName(Player player, DisplaySlot slot, String string) {
         getObjective(player.getScoreboard(), slot).setDisplayName(string);
+    }
+
+    public static void addToTeam(Player player, String teamName, String teamPrefix, boolean seeFriendlyInvis) {
+        addToTeam(player.getName(), teamName, teamPrefix, seeFriendlyInvis);
+    }
+
+    public static void addToTeam(Player p, Player p2, String teamName, String teamPrefix, boolean seeFriendlyInvis) {
+        addToTeam(p, p2.getName(), teamName, teamPrefix, seeFriendlyInvis);
+    }
+
+    public static void removeFromTeam(Player player) {
+        removeFromTeam(player.getName());
     }
 
 }
