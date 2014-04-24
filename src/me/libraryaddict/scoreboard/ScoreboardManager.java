@@ -1,6 +1,7 @@
 package me.libraryaddict.scoreboard;
 
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.scoreboard.DisplaySlot;
 import org.bukkit.scoreboard.Objective;
@@ -10,6 +11,23 @@ import org.bukkit.scoreboard.Team;
 
 public class ScoreboardManager {
     private static FakeScoreboard mainScoreboard = new FakeScoreboard();
+    private static boolean useOfflinePlayer;
+    private static boolean useOfflineTeams;
+
+    static {
+        try {
+            Team.class.getDeclaredMethod("addEntry", String.class);
+            useOfflineTeams = true;
+        } catch (Exception ex) {
+
+        }
+        try {
+            Objective.class.getDeclaredMethod("getScore", String.class);
+            useOfflinePlayer = true;
+        } catch (Exception ex) {
+
+        }
+    }
 
     public static void addToTeam(String player, String teamName, String teamPrefix, boolean seeFriendlyInvis) {
         addToTeam(player, teamName, teamPrefix, null, seeFriendlyInvis);
@@ -45,8 +63,14 @@ public class ScoreboardManager {
         for (Objective obj : board.getObjectives()) {
             obj.unregister();
         }
-        for (String p : board.getEntries()) {
-            board.resetScores(p);
+        if (useOfflineTeams) {
+            for (OfflinePlayer p : board.getPlayers()) {
+                board.resetScores(p);
+            }
+        } else {
+            for (String p : board.getEntries()) {
+                board.resetScores(p);
+            }
         }
         for (Team team : board.getTeams()) {
             team.unregister();
@@ -105,7 +129,11 @@ public class ScoreboardManager {
             }
         }
         if (addToTeam) {
-            team.addEntry(player);
+            if (useOfflineTeams) {
+                team.addPlayer(Bukkit.getOfflinePlayer(player));
+            } else {
+                team.addEntry(player);
+            }
         }
     }
 
@@ -114,11 +142,18 @@ public class ScoreboardManager {
     }
 
     public static void removeFromTeam(String player) {
+        OfflinePlayer pl = (useOfflineTeams ? Bukkit.getOfflinePlayer(player) : null);
         for (Player p : Bukkit.getOnlinePlayers()) {
             Scoreboard board = p.getScoreboard();
             for (Team team : board.getTeams()) {
-                if (team.hasEntry(player)) {
-                    team.removeEntry(player);
+                if (useOfflineTeams) {
+                    if (team.hasPlayer(pl)) {
+                        team.removePlayer(pl);
+                    }
+                } else {
+                    if (team.hasEntry(player)) {
+                        team.removeEntry(player);
+                    }
                 }
             }
         }
@@ -129,9 +164,16 @@ public class ScoreboardManager {
 
     public static void removeFromTeam(Player observer, String player) {
         Scoreboard board = observer.getScoreboard();
+        OfflinePlayer pl = (useOfflineTeams ? Bukkit.getOfflinePlayer(player) : null);
         for (Team team : board.getTeams()) {
-            if (team.hasEntry(player)) {
-                team.removeEntry(player);
+            if (useOfflineTeams) {
+                if (team.hasPlayer(pl)) {
+                    team.removePlayer(pl);
+                }
+            } else {
+                if (team.hasEntry(player)) {
+                    team.removeEntry(player);
+                }
             }
         }
     }
@@ -154,7 +196,11 @@ public class ScoreboardManager {
     public static void hideScore(Player player, DisplaySlot slot, String name) {
         if (name.length() > 16)
             name = name.substring(0, 16);
-        player.getScoreboard().resetScores(name);
+        if (useOfflinePlayer) {
+            player.getScoreboard().resetScores(Bukkit.getOfflinePlayer(name));
+        } else {
+            player.getScoreboard().resetScores(name);
+        }
     }
 
     public static void makeScore(DisplaySlot slot, String name, int score) {
@@ -168,8 +214,9 @@ public class ScoreboardManager {
         if (name.length() > 16) {
             name = name.substring(0, 16);
         }
-        Score c = getObjective(player.getScoreboard(), slot).getScore(name);
-        if (score == 0 && slot == DisplaySlot.SIDEBAR && !c.isScoreSet()) {
+        Objective obj = getObjective(player.getScoreboard(), slot);
+        Score c = useOfflinePlayer ? obj.getScore(Bukkit.getOfflinePlayer(name)) : obj.getScore(name);
+        if (!useOfflineTeams && score == 0 && slot == DisplaySlot.SIDEBAR && !c.isScoreSet()) {
             c.setScore(1);
         }
         if (c.getScore() != score) {
@@ -184,12 +231,21 @@ public class ScoreboardManager {
 
     public static void removeFromTeam(String player, String teamName) {
         FakeTeam team = mainScoreboard.getFakeTeam(teamName);
-        if (team != null)
+        if (team != null) {
             team.removePlayer(player);
+        }
+        OfflinePlayer pl = useOfflineTeams ? Bukkit.getOfflinePlayer(player) : null;
         for (Player p : Bukkit.getOnlinePlayers()) {
             Scoreboard board = p.getScoreboard();
-            if (board.getTeam(teamName) != null && board.getTeam(teamName).hasEntry(player))
-                board.getTeam(teamName).removeEntry(player);
+            if (board.getTeam(teamName) != null) {
+                if (useOfflineTeams) {
+                    if (board.getTeam(teamName).hasPlayer(pl)) {
+                        board.getTeam(teamName).removePlayer(pl);
+                    }
+                } else if (board.getTeam(teamName).hasEntry(player)) {
+                    board.getTeam(teamName).removeEntry(player);
+                }
+            }
         }
     }
 
