@@ -11,19 +11,19 @@ import org.bukkit.scoreboard.Team;
 
 public class ScoreboardManager {
     private static FakeScoreboard mainScoreboard = new FakeScoreboard();
-    private static boolean useOfflinePlayer;
-    private static boolean useOfflineTeams;
+    private static boolean useOfflinePlayer = true;
+    private static boolean useOfflineTeams = true;
 
     static {
         try {
             Team.class.getDeclaredMethod("addEntry", String.class);
-            useOfflineTeams = true;
+            useOfflineTeams = false;
         } catch (Exception ex) {
 
         }
         try {
             Objective.class.getDeclaredMethod("getScore", String.class);
-            useOfflinePlayer = true;
+            useOfflinePlayer = false;
         } catch (Exception ex) {
 
         }
